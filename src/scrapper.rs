@@ -96,6 +96,7 @@ impl AMusicScraper {
                 )
                 .unwrap(),
         );
+
         if amsongpanel.is_err() {
             return Err(anyhow::Error::msg("No song panel"));
         }
@@ -111,6 +112,7 @@ impl AMusicScraper {
                 )
                 .unwrap(),
         );
+
         if amsong_field_panel.is_err() {
             return Err(anyhow::Error::msg("No song field panel"));
         }

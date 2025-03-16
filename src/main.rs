@@ -8,15 +8,16 @@ fn main() {
     compile_error!("Only Windows is supported");
 
     let automation = UIAutomation::new().unwrap();
-    let apple_music = utils::grab_applemusic_window(&automation);
+
+    let apple_music = utils::grab_applemusic_window(&automation, false);
     if apple_music.is_none() {
         println!("No Apple Music window found");
         return;
     }
     let window = apple_music.unwrap();
-    println!(" Updating data");
+
     let scrapper = AMusicScraper::new(automation, window).expect("Couldnt initialize scrapper");
-    println!(" Updating data");
+
     scrapper.update_data();
     let song_info = scrapper.update_song().unwrap();
     let status = scrapper.update_status().unwrap();

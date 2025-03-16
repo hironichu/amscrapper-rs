@@ -4,12 +4,12 @@ use anyhow::Result;
 use scrapper::AMusicScraper;
 use uiautomation::UIAutomation;
 
-pub fn init() -> Result<AMusicScraper> {
+pub fn init(move_window: bool) -> Result<AMusicScraper> {
     #[cfg(not(target_os = "windows"))]
     compile_error!("Only Windows is supported");
 
     let automation = UIAutomation::new().unwrap();
-    let apple_music = utils::grab_applemusic_window(&automation);
+    let apple_music = utils::grab_applemusic_window(&automation, move_window);
     if apple_music.is_none() {
         return Err(anyhow::anyhow!("No Apple Music window found"));
     }
@@ -36,7 +36,7 @@ mod tests {
 
     #[test]
     fn test_init() {
-        let scrapper = init().unwrap();
+        let scrapper = init(false).unwrap();
         scrapper.update_data();
         let song_info = scrapper.update_song().unwrap();
         let status = scrapper.update_status().unwrap();
