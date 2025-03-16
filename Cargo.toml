@@ -2,6 +2,14 @@
 name = "amscrapper-rs"
 version = "0.1.0"
 edition = "2024"
+authors = ["Hironichu"]
+description = "Scrap and gather information from the AppleMusic windows application"
+license = "Apache-2.0"
+repository = "https://github.com/hironichu/amscrapper-rs"
+readme = "README.md"
+keywords = ["apple", "music", "scraper", "windows"]
+categories = ["development-tools"]
+
 [lib]
 crate-type = ["staticlib", "cdylib"]
 bench = false
