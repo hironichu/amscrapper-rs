@@ -1,14 +1,11 @@
 [package]
-name = "wuse-app-rs"
+name = "amscrapper-rs"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-remoteprocess = { version = "0.5.0", features = ["unwind"] }
 uiautomation = "0.17.1"
-apple-music = "0.11.5"
 winprocinfo = "0.1.1"
-sysinfo = "0.33.1"
 regex = "1.11.1"
 winvd = "0.0.48"
 

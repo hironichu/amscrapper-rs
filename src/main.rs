@@ -1,93 +1,364 @@
-#[allow(static_mut_refs)]
 use regex::Regex;
 use std::sync::{Arc, Mutex};
 use uiautomation::UIElement;
+use uiautomation::patterns::UIRangeValuePattern;
+use uiautomation::types::PropertyConditionFlags;
+use uiautomation::variants::Variant;
 use uiautomation::{UIAutomation, types::Handle};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{
-    EnumChildWindows, EnumThreadWindows, GetDesktopWindow, RealGetWindowClassA,
-};
+use windows::Win32::UI::WindowsAndMessaging::EnumThreadWindows;
 
-use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_STYLE, GetWindowLongPtrW, IsWindowVisible, WS_VISIBLE,
-};
+type GetTargetType = Arc<Mutex<Option<Vec<HWND>>>>;
 
-use winvd::{DesktopEvent, get_desktop_count, listen_desktop_events, switch_desktop};
 #[derive(Debug, Clone)]
-struct AMusicInfo {
-    song: Option<String>,
-    artist: Option<String>,
-    album: Option<String>,
-    duration: Option<i32>,
-    current_time: Option<i32>,
-    composer_performer_regex: Regex,
+struct AMusicSongInfo {
+    song: String,
+    artist: String,
+    album: String,
+}
+#[derive(Debug, Clone)]
+struct AMusicTimeInfo {
+    duration: i32,
+    remaining_duration: i32,
+    current_time: i32,
+    total: i32,
+}
+#[derive(Debug, Clone)]
+struct AMusicState {
+    playing: bool,
+    live: bool,
+}
+impl AMusicState {}
+impl Drop for AMusicScraper {
+    fn drop(&mut self) {
+        self.composer_performer_regex = Regex::new("").unwrap();
+        self.automation = UIAutomation::new().unwrap();
+        self.window = None;
+        self.amsongpanel = None;
+        self.amsong_field_panel = None;
+    }
+}
+impl Drop for AMusicSongInfo {
+    fn drop(&mut self) {
+        self.song = String::new();
+        self.artist = String::new();
+        self.album = String::new();
+    }
 }
 
-impl AMusicInfo {
-    pub fn new() -> Self {
-        Self {
-            composer_performer_regex: Regex::new(r"By (.+) \u2014 (.+) \u2014 (.+)").unwrap(),
-            song: None,
-            artist: None,
-            album: None,
-            duration: None,
-            current_time: None,
-        }
+impl Drop for AMusicTimeInfo {
+    fn drop(&mut self) {
+        self.duration = 0;
+        self.remaining_duration = 0;
+        self.current_time = 0;
+        self.total = 0;
     }
-    pub fn parse_artist_and_album(mut self, song: &str, composer_as_artist: bool) {
-        let song_split: Vec<&str> = song.split(" \u{2014} ").collect();
+}
+impl Drop for AMusicState {
+    fn drop(&mut self) {
+        self.playing = false;
+        self.live = false;
+    }
+}
+#[derive(Debug, Clone)]
+struct AMusicScraper {
+    composer_performer_regex: Regex,
+    automation: UIAutomation,
+    window: Option<UIElement>,
+    amsongpanel: Option<UIElement>,
+    amsong_field_panel: Option<UIElement>,
+}
 
-        let matches = self.composer_performer_regex.captures(song);
+impl AMusicScraper {
+    pub fn new(automation: UIAutomation, window: UIElement) -> Self {
+        let mut _self = Self {
+            composer_performer_regex: Regex::new(r"By (.+) \u2014 (.+) \u2014 (.+)").unwrap(),
+            automation,
+            window: Some(window),
+            amsongpanel: None,
+            amsong_field_panel: None,
+        };
+        _self.init_elements();
+        _self
+    }
+
+    fn init_elements(&mut self) {
+        if self.window.is_none() {
+            return;
+        }
+        let window = self.window.as_ref().unwrap();
+        let automation = self.automation.clone();
+        let amsongpanel = window.find_first(
+            uiautomation::types::TreeScope::Descendants,
+            &automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("TransportBar"),
+                    None,
+                )
+                .unwrap(),
+        );
+        if amsongpanel.is_err() {
+            println!("No song panel found");
+            return;
+        }
+        let amsongpanel = amsongpanel.unwrap();
+
+        let amsong_field_panel = amsongpanel.find_first(
+            uiautomation::types::TreeScope::Children,
+            &automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("LCD"),
+                    None,
+                )
+                .unwrap(),
+        );
+        if amsong_field_panel.is_err() {
+            println!("No song field panel found");
+            return;
+        }
+        let amsong_field_panel = amsong_field_panel.unwrap();
+        self.amsong_field_panel = Some(amsong_field_panel);
+        self.amsongpanel = Some(amsongpanel);
+    }
+
+    fn update_song(&self) -> Option<AMusicSongInfo> {
+        if self.amsong_field_panel.is_none() {
+            return None;
+        }
+        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let song_fields = amsong_field_panel.find_all(
+            uiautomation::types::TreeScope::Descendants,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("myScrollViewer"),
+                    None,
+                )
+                .unwrap(),
+        );
+        if song_fields.is_err() {
+            return None;
+        }
+        let song_fields = song_fields.unwrap();
+
+        let mut song_name_element = song_fields[0].clone();
+        let mut song_album_artist_element = song_fields[1].clone();
+
+        if song_name_element
+            .get_bounding_rectangle()
+            .unwrap()
+            .get_bottom()
+            > song_album_artist_element
+                .get_bounding_rectangle()
+                .unwrap()
+                .get_bottom()
+        {
+            song_name_element = song_fields[1].clone();
+            song_album_artist_element = song_fields[0].clone();
+        }
+
+        let song_name = song_name_element.get_name();
+        let song_album_artist = song_album_artist_element.get_name();
+        if song_name.is_err() || song_album_artist.is_err() {
+            return None;
+        }
+        let song_name = song_name.unwrap();
+
+        self.parse_artist_and_album(&song_name, &song_album_artist.unwrap(), false)
+    }
+
+    fn parse_artist_and_album(
+        &self,
+        song_name: &str,
+        song_album_artist: &str,
+        composer_as_artist: bool,
+    ) -> Option<AMusicSongInfo> {
+        let song_split: Vec<&str> = song_album_artist.split(" \u{2014} ").collect();
+        let artist: String;
+        let album: String;
+        let song: String = song_name.into();
+        let matches = self.composer_performer_regex.captures(song_album_artist);
         if let Some(captures) = matches {
             let song_composer = captures.get(1).unwrap().as_str();
             let song_performer = captures.get(2).unwrap().as_str();
-            self.artist = if composer_as_artist {
-                Some(song_composer.into())
+            artist = if composer_as_artist {
+                song_composer.into()
             } else {
-                Some(song_performer.into())
+                song_performer.into()
             };
-            self.album = Some(captures.get(3).unwrap().as_str().into());
-            return;
+            album = captures.get(3).unwrap().as_str().into();
+            return Some(AMusicSongInfo {
+                song,
+                artist,
+                album,
+            });
         }
         if song_split.len() > 1 {
-            self.artist = Some(song_split[0].into());
-            self.album = Some(song_split[1].into());
+            artist = song_split[0].into();
+            album = song_split[1].into();
         } else {
-            self.artist = Some(song_split[0].into());
-            self.album = Some(song_split[0].into());
+            artist = song_split[0].into();
+            album = song_split[0].into();
         }
+        Some(AMusicSongInfo {
+            song,
+            artist,
+            album,
+        })
     }
-    pub fn parse_time_string(mut self, time: String) {
-        if time.is_empty() {
-            return;
+    fn update_time(&self) -> Option<AMusicTimeInfo> {
+        if self.amsong_field_panel.is_none() {
+            return None;
         }
-        //remove leading "-"
-        let mut ptime = time.clone();
-        if time.contains("-") {
-            ptime = ptime.split("-").collect::<Vec<&str>>()[1].to_string();
+        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let current_time_element = amsong_field_panel.find_first(
+            uiautomation::types::TreeScope::Children,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("CurrentTime"),
+                    Some(PropertyConditionFlags::All),
+                )
+                .unwrap(),
+        );
+        let mut current_time;
+        let mut remaining_duration;
+        let mut total;
+        if current_time_element.is_err() {
+            current_time = 0;
+        } else {
+            let current_timeelem = current_time_element.unwrap().get_name().unwrap();
+
+            let mut current_time_split = current_timeelem.split(":");
+            let min = current_time_split.next().unwrap().parse::<i32>().unwrap();
+            let sec = current_time_split.next().unwrap().parse::<i32>().unwrap();
+            current_time = min * 60 + sec;
         }
-        let ctime = ptime.split(":").collect::<Vec<&str>>();
-        let min = ctime[0].parse::<i32>().unwrap();
-        let sec = ctime[1].parse::<i32>().unwrap();
-        let total = min * 60 + sec;
-        self.current_time = Some(total);
+        let remaining_duration_element = amsong_field_panel.find_first(
+            uiautomation::types::TreeScope::Children,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("Duration"),
+                    Some(PropertyConditionFlags::All),
+                )
+                .unwrap(),
+        );
+        if remaining_duration_element.is_err() {
+            remaining_duration = 0;
+        } else {
+            let remaining_durationelem = remaining_duration_element.unwrap().get_name().unwrap();
+
+            let mut duration_split = remaining_durationelem.split(":");
+            let min = duration_split.next().unwrap().parse::<i32>().unwrap();
+            let sec = duration_split.next().unwrap().parse::<i32>().unwrap();
+            remaining_duration = min * 60 + sec;
+        }
+        total = current_time + remaining_duration;
+
+        let lcd_scrubber = amsong_field_panel.find_first(
+            uiautomation::types::TreeScope::Descendants,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("LCDScrubber"),
+                    None,
+                )
+                .unwrap(),
+        );
+
+        if lcd_scrubber.is_ok() {
+            let scrubber_pos = lcd_scrubber.unwrap();
+            let pattern: UIRangeValuePattern = scrubber_pos.get_pattern().unwrap();
+
+            let slider_max = pattern.get_maximum();
+            let slider_min = pattern.get_minimum();
+            let slider_val = pattern.get_value();
+            if slider_max.is_err() || slider_min.is_err() || slider_val.is_err() {
+                //
+            } else {
+                let slider_val = slider_val.unwrap();
+                let slider_max = slider_max.unwrap();
+
+                if current_time == 0 {
+                    current_time = slider_val.round() as i32;
+                }
+                if remaining_duration == 0 {
+                    remaining_duration = slider_max.round() as i32 - current_time;
+                }
+                if total == 0 {
+                    total = remaining_duration + current_time;
+                }
+            }
+        }
+
+        Some(AMusicTimeInfo {
+            duration: total,
+            remaining_duration,
+            current_time,
+            total,
+        })
     }
-    // private static int? ParseTimeString(string? time) {
+    fn update_live(&self) -> bool {
+        if self.amsong_field_panel.is_none() {
+            return false;
+        }
+        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let check = amsong_field_panel.find_first(
+            uiautomation::types::TreeScope::Children,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::Name,
+                    Variant::from("LIVE"),
+                    None,
+                )
+                .unwrap(),
+        );
 
-    //     if (time == null) {
-    //         return null;
-    //     }
+        check.is_ok()
+    }
+    fn update_status(&self) -> Option<AMusicState> {
+        if self.amsongpanel.is_none() {
+            println!("No manel");
+            return None;
+        }
+        let amsongpanel = self.amsongpanel.clone().unwrap();
+        let play_pause_btn = amsongpanel.find_first(
+            uiautomation::types::TreeScope::Descendants,
+            &self
+                .automation
+                .create_property_condition(
+                    uiautomation::types::UIProperty::AutomationId,
+                    Variant::from("TransportControl_PlayPauseStop"),
+                    None,
+                )
+                .unwrap(),
+        );
+        if play_pause_btn.is_err() {
+            return None;
+        }
 
-    //     // remove leading "-"
-    //     if (time.Contains('-')) {
-    //         time = time.Split('-')[1];
-    //     }
+        let play_pause_btn = play_pause_btn.unwrap();
 
-    //     int min = int.Parse(time.Split(":")[0]);
-    //     int sec = int.Parse(time.Split(":")[1]);
+        Some(AMusicState {
+            playing: play_pause_btn.get_name().unwrap() == "Pause",
+            live: self.update_live(),
+        })
+    }
 
-    //     return min * 60 + sec;
-    // }
+    pub fn update_data(&self) {
+        self.update_song();
+        self.update_time();
+        self.update_live();
+        self.update_status();
+    }
 }
 fn find_app_hwnd() -> Option<Vec<HWND>> {
     let storage: GetTargetType = Arc::new(Mutex::new(None));
@@ -95,174 +366,80 @@ fn find_app_hwnd() -> Option<Vec<HWND>> {
 
     unsafe {
         let _ = EnumThreadWindows(0, Some(find_target_process), l_param);
-        // let desktop_hwnd = GetDesktopWindow();
-        // let _ = EnumChildWindows(desktop_hwnd, Some(find_target_process), l_param);
     }
 
     let state = storage.lock().unwrap().take();
     state
 }
-// make a Vec where we will store the hwnds of the target apps
-type GetTargetType = Arc<Mutex<Option<Vec<HWND>>>>;
 
 extern "system" fn find_target_process(hwnd: HWND, l_param: LPARAM) -> BOOL {
-    let mut buffer = [0_u8; 128];
-    let read_len = unsafe { RealGetWindowClassA(hwnd, &mut buffer) };
-    let proc_name = String::from_utf8_lossy(&buffer[..read_len as usize]);
-
-    // if proc_name == "Microsoft.UI.Content.DesktopChildSiteBridge" {
-    // }
-    // let desk = winvd::get_desktop_by_window(hwnd);
-    // match desk {
-    //     Ok(desk) => {
-    //         println!("Desktop: {:?}", desk);
-    //     }
-    //     Err(_) => {
-    //         // println!("Error: {:?}", err);
-    //     }
-    // }
-    println!("Which desktop : {:?}", winvd::get_desktop_by_window(hwnd));
     let storage = unsafe { &*(l_param.0 as *const GetTargetType) };
     let mut storage = storage.lock().unwrap();
     storage.get_or_insert_with(|| Vec::new());
     storage.as_mut().unwrap().push(hwnd);
-    // return BOOL(1);
 
     BOOL(1)
 }
-// const TARGET_APP_TITLE: &str = "AppleMusic";
-fn main() {
-    // let desktop = winvd::get_current_desktop().unwrap();
-    // println!("Current Desktop: {:?}", desktop);
+
+fn grab_applemusic_window(automation: &UIAutomation) -> Option<UIElement> {
     let app_hwn =
         find_app_hwnd().expect("target app handle is not found. make sure the app is running");
-    //loop through that
-    let automation = UIAutomation::new().unwrap();
-    let cache = automation.create_cache_request().unwrap();
-    let root = automation.get_root_element_build_cache(&cache).unwrap();
-    println!("Root Name : {:?}", root.get_name());
-    println!("Root Class : {:?}", root.get_classname());
-    println!("Count : {:?}", app_hwn.len());
-    let apple_music: Option<UIElement> = app_hwn.iter().find_map(|hwnd| {
-        let desk = winvd::get_desktop_by_window(*hwnd);
-        let element = automation
-            .element_from_handle(Handle::from(hwnd.0 as isize))
-            .expect("Couldnt find handle");
-        let apple_music_window_filter = automation
-            .create_matcher()
-            .from(element)
-            .timeout(200)
-            .contains_name("Apple Music")
-            .find_first()
-            .expect("Could not find any window with Apple Music");
-
-        let apple_music = apple_music_window_filter;
-
-        match desk {
-            Ok(_) => {
-                if winvd::is_window_on_current_desktop(*hwnd).unwrap() {
-                    return Some(apple_music);
-                }
-                if winvd::is_pinned_app(*hwnd).unwrap() {
-                    winvd::unpin_app(*hwnd).unwrap();
-                }
-                if winvd::is_pinned_window(*hwnd).unwrap() {
-                    winvd::unpin_window(*hwnd).unwrap();
-                }
-                winvd::pin_app(*hwnd).unwrap();
-                None
-            }
-            Err(_) => None,
+    app_hwn.iter().find_map(|hwnd| {
+        let element = automation.element_from_handle(Handle::from(hwnd.0 as isize));
+        if element.is_err() {
+            return None;
         }
-    });
-    // app_hwn.iter().for_each(|hwnd| {
-    //     let element = automation
-    //         .element_from_handle(Handle::from(hwnd.0))
-    //         .unwrap();
-    //     println!("Elem Name : {:?}", element.get_name());
-    //     let matcher = automation.create_matcher().from(element).timeout(1000);
-    //     // .name("Apple Music");
-    //     matcher.find_all().unwrap().iter().for_each(|elem| {
-    //         println!("Name {}", elem.get_name().unwrap());
-    //         println!("Class {}", elem.get_classname().unwrap());
-    //     });
-    //     // .classname("WinUIDesktopWin32WindowClass");
-    //     // match matcher.find_first() {
-    //     //     Ok(elem) => {
-    //     //         println!("Found Apple Music");
-    //     //         println!("Name {}", elem.get_name().unwrap());
-    //     //         println!("Class {}", elem.get_classname().unwrap());
-    //     //         Some(elem)
-    //     //     }
-    //     //     Err(e) => None,
-    //     // }
-    //     // None
-    // });
-    // return;
-    // let matcher = automation
-    //     .create_matcher()
-    //     .from(app.unwrap())
-    //     .timeout(2500)
-    //     .classname("NamedContainerAutomationPeer");
+        let element = element.unwrap();
+        if element.get_name().unwrap() == "Apple Music" {
+            let desk = winvd::get_desktop_by_window(*hwnd);
+            return match desk {
+                Ok(_) => {
+                    if winvd::is_window_on_current_desktop(*hwnd).unwrap() {
+                        return Some(element);
+                    }
+                    if winvd::is_pinned_app(*hwnd).unwrap() {
+                        winvd::unpin_app(*hwnd).unwrap();
+                    }
+                    if winvd::is_pinned_window(*hwnd).unwrap() {
+                        winvd::unpin_window(*hwnd).unwrap();
+                    }
+                    // winvd::move_window_to_desktop( winvd::get_current_desktop().unwrap(), hwnd).unwrap();
+                    winvd::pin_window(*hwnd).unwrap();
+                    Some(element)
+                }
+                Err(_) => None,
+            };
+        } else {
+            None
+        }
+    })
+}
 
-    // if let Ok(amsong_panel) = matcher.find_first() {
-    //     let childrens = automation
-    //         .create_matcher()
-    //         .from(amsong_panel)
-    //         .classname("TextBlock")
-    //         .find_all();
-    //     match childrens {
-    //         Ok(childrens) => {
-    //             if childrens.len() <= 0 {
-    //                 panic!("No container");
-    //             }
+fn main() {
+    #[cfg(not(target_os = "windows"))]
+    compile_error!("Only Windows is supported");
 
-    //             for child in childrens {
-    //                 let song = child.get_name().unwrap();
-    //                 println!("Song: {}", song);
-    //             }
-    //             // let song = childrens[0].get_name().unwrap();
-    //             // let artist_and_album = childrens[1].get_name().unwrap();
-    //             // song_info.set_song(&song.clone());
-    //             // song_info.parse_artist_and_album(&artist_and_album.clone(), false);
-    //             // println!("Song: {}", song_info.song);
-    //         }
-    //         Err(e) => {
-    //             println!("No song playing");
-    //             return;
-    //         }
-    //     }
-    // } else {
-    //     println!("No song panel");
-    //     return;
-    // }
-    // let storage: GetTargetType = Arc::new(Mutex::new(None));
-    // unsafe {
-    //     let l_param = LPARAM(&storage as *const GetTargetType as isize);
-    //     let desktop_hwnd = GetDesktopWindow();
-    //     let test = windows::Win32::UI::WindowsAndMessaging::EnumWindows(desktop_hwnd, lparam);
-    // }
-    // assert_ne!(app_hwn, HWND::default(), "app handle must not be empty");
-    // println!("handle for '{}' is {:?}", TARGET_APP_TITLE, app_hwn);
-    // let proc_list = winprocinfo::get_list().expect("Failed to retrieve process list");
-    // let process_name = "AppleMusic.exe";
-    // println!("\nSearch by process name: {}", process_name);
-    // let procs = proc_list.search_by_name(process_name)[0];
+    let automation = UIAutomation::new().unwrap();
+    let apple_music = grab_applemusic_window(&automation);
+    if apple_music.is_none() {
+        println!("No Apple Music window found");
+        return;
+    }
+    let window = apple_music.unwrap();
 
-    // println!("Found PID: {}", procs.unique_process_id);
-    // procs.threads.iter().for_each(|thread| {
-    //     println!("Thread ID: {}", thread.);
-    // });
-    // let mut test = unsafe {
-    // windows::Win32::System::Threading::GetProcessHandleCount(procs.unique_process_id);
-    // };
-    // println!("Desktops: {:?}", get_desktop_count().unwrap());
-    // let (tx, rx) = std::sync::mpsc::channel::<DesktopEvent>();
-    // let _notifications_thread = listen_desktop_events(tx);
-    // std::thread::spawn(|| {
-    //     for item in rx {
-    //         println!("{:?}", item);
-    //     }
-    // });
-    // switch_desktop(1).unwrap();
+    let scrapper = AMusicScraper::new(automation, window);
+    scrapper.update_data();
+    let song_info = scrapper.update_song().unwrap();
+    let status = scrapper.update_status().unwrap();
+    if status.playing {
+        let timeinfo = scrapper.update_time().unwrap();
+        println!("Artist: {}", song_info.artist);
+        println!("Name : {}", song_info.song);
+        println!("Album: {}", song_info.album);
+        println!("Duration: {}", timeinfo.duration);
+        println!("Remaining Duration: {}", timeinfo.remaining_duration);
+        println!("Current Time: {}", timeinfo.current_time);
+    } else {
+        println!("Paused");
+    }
 }
