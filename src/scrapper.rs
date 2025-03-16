@@ -1,31 +1,13 @@
+use crate::music::{AMusicSongInfo, AMusicState, AMusicTimeInfo};
 use anyhow::Result;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+
 use uiautomation::UIAutomation;
 use uiautomation::UIElement;
 use uiautomation::patterns::UIRangeValuePattern;
 use uiautomation::types::PropertyConditionFlags;
 use uiautomation::variants::Variant;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AMusicSongInfo {
-    pub song: String,
-    pub artist: String,
-    pub album: String,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AMusicTimeInfo {
-    pub duration: i32,
-    pub remaining_duration: i32,
-    pub current_time: i32,
-    pub total: i32,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AMusicState {
-    pub playing: bool,
-    pub live: bool,
-}
-impl AMusicState {}
 impl Drop for AMusicScraper {
     fn drop(&mut self) {
         self.composer_performer_regex = Regex::new("").unwrap();
@@ -33,28 +15,6 @@ impl Drop for AMusicScraper {
         self.window = None;
         self.amsongpanel = None;
         self.amsong_field_panel = None;
-    }
-}
-impl Drop for AMusicSongInfo {
-    fn drop(&mut self) {
-        self.song = String::new();
-        self.artist = String::new();
-        self.album = String::new();
-    }
-}
-
-impl Drop for AMusicTimeInfo {
-    fn drop(&mut self) {
-        self.duration = 0;
-        self.remaining_duration = 0;
-        self.current_time = 0;
-        self.total = 0;
-    }
-}
-impl Drop for AMusicState {
-    fn drop(&mut self) {
-        self.playing = false;
-        self.live = false;
     }
 }
 #[derive(Debug, Clone)]
@@ -325,7 +285,6 @@ impl AMusicScraper {
     }
     pub(crate) fn update_status(&self) -> Option<AMusicState> {
         if self.amsongpanel.is_none() {
-            println!("No manel");
             return None;
         }
         let amsongpanel = self.amsongpanel.clone().unwrap();
@@ -351,10 +310,13 @@ impl AMusicScraper {
             live: self.update_live(),
         })
     }
-    pub(crate) fn update_data(&self) {
-        self.update_song();
-        self.update_time();
-        self.update_live();
-        self.update_status();
+    pub(crate) fn update_data(
+        &self,
+    ) -> (
+        Option<AMusicState>,
+        Option<AMusicSongInfo>,
+        Option<AMusicTimeInfo>,
+    ) {
+        (self.update_status(), self.update_song(), self.update_time())
     }
 }

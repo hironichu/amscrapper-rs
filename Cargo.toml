@@ -3,11 +3,16 @@ name = "amscrapper-rs"
 version = "0.1.0"
 edition = "2024"
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["staticlib", "cdylib"]
+bench = false
 
-[[bin]]
-name = "amscrapperrs"
-path = "src/main.rs"
+[profile.dev]
+opt-level = 1
+overflow-checks = false
+
+[profile.release]
+opt-level = 3
+overflow-checks = false
 
 [dependencies]
 uiautomation = "0.17.1"
