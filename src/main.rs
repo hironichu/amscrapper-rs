@@ -14,8 +14,9 @@ fn main() {
         return;
     }
     let window = apple_music.unwrap();
-
-    let scrapper = AMusicScraper::new(automation, window);
+    println!(" Updating data");
+    let scrapper = AMusicScraper::new(automation, window).expect("Couldnt initialize scrapper");
+    println!(" Updating data");
     scrapper.update_data();
     let song_info = scrapper.update_song().unwrap();
     let status = scrapper.update_status().unwrap();

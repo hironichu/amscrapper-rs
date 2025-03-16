@@ -1,24 +1,26 @@
+use anyhow::Result;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use uiautomation::UIAutomation;
 use uiautomation::UIElement;
 use uiautomation::patterns::UIRangeValuePattern;
 use uiautomation::types::PropertyConditionFlags;
 use uiautomation::variants::Variant;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AMusicSongInfo {
     pub song: String,
     pub artist: String,
     pub album: String,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AMusicTimeInfo {
     pub duration: i32,
     pub remaining_duration: i32,
     pub current_time: i32,
     pub total: i32,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AMusicState {
     pub playing: bool,
     pub live: bool,
@@ -65,7 +67,7 @@ pub struct AMusicScraper {
 }
 
 impl AMusicScraper {
-    pub fn new(automation: UIAutomation, window: UIElement) -> Self {
+    pub fn new(automation: UIAutomation, window: UIElement) -> Result<Self, anyhow::Error> {
         let mut _self = Self {
             composer_performer_regex: Regex::new(r"By (.+) \u2014 (.+) \u2014 (.+)").unwrap(),
             automation,
@@ -73,15 +75,16 @@ impl AMusicScraper {
             amsongpanel: None,
             amsong_field_panel: None,
         };
-        _self.init_elements();
-        _self
+        _self.init_elements()?;
+        Ok(_self)
     }
 
-    pub fn init_elements(&mut self) {
+    pub fn init_elements(&mut self) -> Result<(), anyhow::Error> {
         if self.window.is_none() {
-            return;
+            return Err(anyhow::Error::msg("No window defined"));
         }
         let window = self.window.as_ref().unwrap();
+
         let automation = self.automation.clone();
         let amsongpanel = window.find_first(
             uiautomation::types::TreeScope::Descendants,
@@ -94,8 +97,7 @@ impl AMusicScraper {
                 .unwrap(),
         );
         if amsongpanel.is_err() {
-            println!("No song panel found");
-            return;
+            return Err(anyhow::Error::msg("No song panel"));
         }
         let amsongpanel = amsongpanel.unwrap();
 
@@ -110,12 +112,12 @@ impl AMusicScraper {
                 .unwrap(),
         );
         if amsong_field_panel.is_err() {
-            println!("No song field panel found");
-            return;
+            return Err(anyhow::Error::msg("No song field panel"));
         }
         let amsong_field_panel = amsong_field_panel.unwrap();
         self.amsong_field_panel = Some(amsong_field_panel);
         self.amsongpanel = Some(amsongpanel);
+        Ok(())
     }
 
     pub fn update_song(&self) -> Option<AMusicSongInfo> {
