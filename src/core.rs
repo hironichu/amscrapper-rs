@@ -3,6 +3,7 @@ use anyhow::Result;
 use music::{AMusicSongInfo, AMusicState, AMusicTimeInfo};
 use scrapper::AMusicScraper;
 use uiautomation::UIAutomation;
+
 pub fn init(move_window: bool) -> Result<AMusicScraper> {
     #[cfg(not(target_os = "windows"))]
     compile_error!("Only Windows is supported");

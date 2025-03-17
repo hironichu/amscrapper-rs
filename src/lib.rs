@@ -1,4 +1,4 @@
-mod core;
-mod music;
-mod scrapper;
-mod utils;
+pub mod core;
+pub mod music;
+pub mod scrapper;
+pub mod utils;
