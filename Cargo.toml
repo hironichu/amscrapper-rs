@@ -9,6 +9,7 @@ repository = "https://github.com/hironichu/amscrapper-rs"
 readme = "README.md"
 keywords = ["apple", "music", "scraper", "windows"]
 categories = ["development-tools"]
+include = ["**/*.rs", "Cargo.toml"]
 
 [lib]
 crate-type = ["staticlib", "cdylib"]
