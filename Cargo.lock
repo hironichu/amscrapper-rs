@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "amscrapper_rs"
+name = "amscrapper-rs"
 version = "0.1.1"
 dependencies = [
  "anyhow",

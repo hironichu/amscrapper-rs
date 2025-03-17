@@ -1,5 +1,5 @@
 [package]
-name = "amscrapper_rs"
+name = "amscrapper-rs"
 version = "0.1.1"
 edition = "2024"
 authors = ["Hironichu"]
@@ -12,6 +12,7 @@ categories = ["development-tools"]
 include = ["**/*.rs", "Cargo.toml"]
 
 [lib]
+name = "amscrapper_rs"
 crate-type = ["staticlib", "cdylib"]
 bench = false
 
