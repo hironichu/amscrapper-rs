@@ -1,5 +1,5 @@
 [package]
-name = "amscrapper-rs"
+name = "amscrapper_rs"
 version = "0.1.0"
 edition = "2024"
 authors = ["Hironichu"]
