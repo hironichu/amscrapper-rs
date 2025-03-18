@@ -10,27 +10,27 @@ use uiautomation::variants::Variant;
 
 impl Drop for AMusicScraper {
     fn drop(&mut self) {
-        self.composer_performer_regex = Regex::new("").unwrap();
-        self.automation = UIAutomation::new().unwrap();
+        self.automation = None;
         self.window = None;
         self.amsongpanel = None;
         self.amsong_field_panel = None;
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct AMusicScraper {
-    composer_performer_regex: Regex,
-    automation: UIAutomation,
+    automation: Option<UIAutomation>,
     window: Option<UIElement>,
     amsongpanel: Option<UIElement>,
     amsong_field_panel: Option<UIElement>,
 }
 
+unsafe impl Send for AMusicScraper {}
+unsafe impl Sync for AMusicScraper {}
+
 impl AMusicScraper {
     pub fn new(automation: UIAutomation, window: UIElement) -> Result<Self, anyhow::Error> {
         let mut _self = Self {
-            composer_performer_regex: Regex::new(r"By (.+) \u2014 (.+) \u2014 (.+)").unwrap(),
-            automation,
+            automation: Some(automation),
             window: Some(window),
             amsongpanel: None,
             amsong_field_panel: None,
@@ -45,7 +45,7 @@ impl AMusicScraper {
         }
         let window = self.window.as_ref().unwrap();
 
-        let automation = self.automation.clone();
+        let automation = self.automation.clone().unwrap();
         let amsongpanel = window.find_first(
             uiautomation::types::TreeScope::Descendants,
             &automation
@@ -87,10 +87,10 @@ impl AMusicScraper {
             return None;
         }
         let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let automation = self.automation.clone().unwrap();
         let song_fields = amsong_field_panel.find_all(
             uiautomation::types::TreeScope::Descendants,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::AutomationId,
                     Variant::from("myScrollViewer"),
@@ -129,7 +129,7 @@ impl AMusicScraper {
         self.parse_artist_and_album(&song_name, &song_album_artist.unwrap(), false)
     }
 
-    fn parse_artist_and_album(
+    pub fn parse_artist_and_album(
         &self,
         song_name: &str,
         song_album_artist: &str,
@@ -139,7 +139,9 @@ impl AMusicScraper {
         let artist: String;
         let album: String;
         let song: String = song_name.into();
-        let matches = self.composer_performer_regex.captures(song_album_artist);
+
+        let composer_performer_regex = Regex::new(r"By (.+) \u2014 (.+) \u2014 (.+)").unwrap();
+        let matches = composer_performer_regex.captures(song_album_artist);
         if let Some(captures) = matches {
             let song_composer = captures.get(1).unwrap().as_str();
             let song_performer = captures.get(2).unwrap().as_str();
@@ -168,15 +170,15 @@ impl AMusicScraper {
             album,
         })
     }
-    pub(crate) fn update_time(&self) -> Option<AMusicTimeInfo> {
+    pub fn update_time(&self) -> Option<AMusicTimeInfo> {
         if self.amsong_field_panel.is_none() {
             return None;
         }
         let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let automation = self.automation.as_ref().unwrap();
         let current_time_element = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Children,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::AutomationId,
                     Variant::from("CurrentTime"),
@@ -199,8 +201,7 @@ impl AMusicScraper {
         }
         let remaining_duration_element = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Children,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::AutomationId,
                     Variant::from("Duration"),
@@ -222,8 +223,7 @@ impl AMusicScraper {
 
         let lcd_scrubber = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Descendants,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::AutomationId,
                     Variant::from("LCDScrubber"),
@@ -264,15 +264,15 @@ impl AMusicScraper {
             total,
         })
     }
-    pub(crate) fn update_live(&self) -> bool {
+    pub fn update_live(&self) -> bool {
         if self.amsong_field_panel.is_none() {
             return false;
         }
         let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let automation = self.automation.as_ref().unwrap();
         let check = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Children,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::Name,
                     Variant::from("LIVE"),
@@ -283,15 +283,15 @@ impl AMusicScraper {
 
         check.is_ok()
     }
-    pub(crate) fn update_status(&self) -> Option<AMusicState> {
+    pub fn update_status(&self) -> Option<AMusicState> {
         if self.amsongpanel.is_none() {
             return None;
         }
         let amsongpanel = self.amsongpanel.clone().unwrap();
+        let automation = self.automation.as_ref().unwrap();
         let play_pause_btn = amsongpanel.find_first(
             uiautomation::types::TreeScope::Descendants,
-            &self
-                .automation
+            &automation
                 .create_property_condition(
                     uiautomation::types::UIProperty::AutomationId,
                     Variant::from("TransportControl_PlayPauseStop"),
@@ -310,7 +310,7 @@ impl AMusicScraper {
             live: self.update_live(),
         })
     }
-    pub(crate) fn update_data(
+    pub fn update_data(
         &self,
     ) -> (
         Option<AMusicState>,
