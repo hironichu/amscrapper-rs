@@ -1,7 +1,7 @@
 
 [package]
 name = "amscrapper-rs"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 authors = ["Hironichu"]
 description = "Scrap and gather information from the AppleMusic windows application"
@@ -13,8 +13,13 @@ categories = ["development-tools"]
 include = ["**/*.rs", "Cargo.toml"]
 
 [lib]
-crate-type = ["staticlib", "cdylib", "rlib", "lib"]
+crate-type = ["staticlib", "rlib"]
 bench = false
+
+# [[lib]]
+# name = "amscrapper_rs_ffi"
+# crate-type = ["cdylib"]
+# bench = false
 
 [profile.dev]
 opt-level = 1
