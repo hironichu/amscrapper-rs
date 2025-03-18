@@ -12,6 +12,7 @@ keywords = ["apple", "music", "scraper", "windows"]
 categories = ["development-tools"]
 include = ["**/*.rs", "Cargo.toml"]
 
+
 [lib]
 crate-type = ["staticlib", "rlib"]
 bench = false

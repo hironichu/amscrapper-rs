@@ -1,15 +1,15 @@
-use crate::{music, scrapper, utils};
+use crate::{
+    music, scrapper,
+    utils::{self},
+};
 use anyhow::Result;
 use music::{AMusicSongInfo, AMusicState, AMusicTimeInfo};
 use scrapper::AMusicScraper;
 use uiautomation::UIAutomation;
 
 pub fn init(move_window: bool) -> Result<AMusicScraper> {
-    #[cfg(not(target_os = "windows"))]
-    compile_error!("Only Windows is supported");
-
     let automation = UIAutomation::new().unwrap();
-    let apple_music = utils::grab_window("Apple Music", &automation, move_window);
+    let apple_music = utils::grab_window(&automation, move_window);
     if apple_music.is_none() {
         return Err(anyhow::anyhow!("No Apple Music window found"));
     }
