@@ -23,11 +23,11 @@ pub fn playing(scrapper: &AMusicScraper) -> Option<(AMusicSongInfo, AMusicState,
     let song_info = data.1;
     let status = data.0;
     let time_info = data.2;
-    if status.is_some() {
+    if status.is_some() && song_info.is_some() && time_info.is_some() {
         let status = status.unwrap();
-        if status.playing {
-            return Some((song_info.unwrap(), status, time_info.unwrap()));
-        }
+        let song_info = song_info.unwrap();
+        let time_info = time_info.unwrap();
+        return Some((song_info, status, time_info));
     }
     None
 }

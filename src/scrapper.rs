@@ -45,7 +45,7 @@ impl AMusicScraper {
         }
         let window = self.window.as_ref().unwrap();
 
-        let automation = self.automation.clone().unwrap();
+        let automation = self.automation.as_ref().unwrap();
         let amsongpanel = window.find_first(
             uiautomation::types::TreeScope::Descendants,
             &automation
@@ -83,11 +83,28 @@ impl AMusicScraper {
     }
 
     pub fn update_song(&self) -> Option<AMusicSongInfo> {
+        //check if the window is still open
+        if self.window.is_none() {
+            return None;
+        }
+        let winid = self.window.as_ref().unwrap().get_process_id();
+        if winid.is_err() {
+            return None;
+        }
+        //try to get the window from the process id
+        let hwnd = winid.unwrap();
+        let hwnd = hwnd as isize;
+        let hwnd = uiautomation::types::Handle::from(hwnd);
+        let automation = self.automation.as_ref().unwrap();
+        let window = automation.element_from_handle(hwnd);
+        if window.is_err() {
+            return None;
+        }
         if self.amsong_field_panel.is_none() {
             return None;
         }
-        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
-        let automation = self.automation.clone().unwrap();
+        let amsong_field_panel = self.amsong_field_panel.as_ref().unwrap();
+        let automation = self.automation.as_ref().unwrap();
         let song_fields = amsong_field_panel.find_all(
             uiautomation::types::TreeScope::Descendants,
             &automation
@@ -102,7 +119,10 @@ impl AMusicScraper {
             return None;
         }
         let song_fields = song_fields.unwrap();
-
+        //check if song_fields contains at least 2 elements
+        if song_fields.len() < 2 {
+            return None;
+        }
         let mut song_name_element = song_fields[0].clone();
         let mut song_album_artist_element = song_fields[1].clone();
 
@@ -174,7 +194,7 @@ impl AMusicScraper {
         if self.amsong_field_panel.is_none() {
             return None;
         }
-        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let amsong_field_panel = self.amsong_field_panel.as_ref().unwrap();
         let automation = self.automation.as_ref().unwrap();
         let current_time_element = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Children,
@@ -268,7 +288,7 @@ impl AMusicScraper {
         if self.amsong_field_panel.is_none() {
             return false;
         }
-        let amsong_field_panel = self.amsong_field_panel.clone().unwrap();
+        let amsong_field_panel = self.amsong_field_panel.as_ref().unwrap();
         let automation = self.automation.as_ref().unwrap();
         let check = amsong_field_panel.find_first(
             uiautomation::types::TreeScope::Children,
@@ -287,7 +307,7 @@ impl AMusicScraper {
         if self.amsongpanel.is_none() {
             return None;
         }
-        let amsongpanel = self.amsongpanel.clone().unwrap();
+        let amsongpanel = self.amsongpanel.as_ref().unwrap();
         let automation = self.automation.as_ref().unwrap();
         let play_pause_btn = amsongpanel.find_first(
             uiautomation::types::TreeScope::Descendants,

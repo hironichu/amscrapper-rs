@@ -41,8 +41,11 @@ extern "system" fn find_target_process(hwnd: HWND, l_param: LPARAM) -> BOOL {
 /// It also checks if the window is on the current desktop, if not it moves it to the current desktop
 /// If the window is pinned, it unpins it
 pub fn grab_window(automation: &UIAutomation, move_window: bool) -> Option<UIElement> {
-    let hwnd =
-        find_app_hwnd().expect("target app handle is not found. make sure the app is running");
+    let hwnd = find_app_hwnd();
+    if hwnd.is_none() {
+        return None;
+    }
+    let hwnd = hwnd.unwrap();
     let element = automation.element_from_handle(Handle::from(hwnd.0 as isize));
     if element.is_err() {
         return None;
