@@ -14,7 +14,7 @@ include = ["**/*.rs", "Cargo.toml"]
 
 
 [lib]
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["cdylib", "rlib"]
 bench = false
 
 
