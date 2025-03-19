@@ -87,19 +87,6 @@ impl AMusicScraper {
         if self.window.is_none() {
             return None;
         }
-        let winid = self.window.as_ref().unwrap().get_process_id();
-        if winid.is_err() {
-            return None;
-        }
-        //try to get the window from the process id
-        let hwnd = winid.unwrap();
-        let hwnd = hwnd as isize;
-        let hwnd = uiautomation::types::Handle::from(hwnd);
-        let automation = self.automation.as_ref().unwrap();
-        let window = automation.element_from_handle(hwnd);
-        if window.is_err() {
-            return None;
-        }
         if self.amsong_field_panel.is_none() {
             return None;
         }
@@ -276,7 +263,9 @@ impl AMusicScraper {
                 }
             }
         }
-
+        if current_time == 0 && remaining_duration == 0 && total == 0 {
+            return None;
+        }
         Some(AMusicTimeInfo {
             duration: total,
             remaining_duration,

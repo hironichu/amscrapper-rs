@@ -20,6 +20,7 @@ pub fn init(move_window: bool) -> Result<AMusicScraper> {
 
 pub fn playing(scrapper: &AMusicScraper) -> Option<(AMusicSongInfo, AMusicState, AMusicTimeInfo)> {
     let data = scrapper.update_data();
+    println!("DEBUG : {:?}", data.clone());
     let song_info = data.1;
     let status = data.0;
     let time_info = data.2;

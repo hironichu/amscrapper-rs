@@ -1,7 +1,7 @@
 
 [package]
 name = "amscrapper-rs"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 authors = ["Hironichu"]
 description = "Scrap and gather information from the AppleMusic windows application"
@@ -14,18 +14,15 @@ include = ["**/*.rs", "Cargo.toml"]
 
 
 [lib]
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 bench = false
 
-# [[lib]]
-# name = "amscrapper_rs_ffi"
-# crate-type = ["cdylib"]
-# bench = false
 
 [profile.dev]
 opt-level = 1
 overflow-checks = false
-incremental = true      # Compile your binary in smaller steps.
+incremental = true
+
 [profile.release]
 opt-level = 3
 overflow-checks = false
